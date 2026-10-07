@@ -55,13 +55,13 @@ function P_Verdu(s1_0, s2_0, s1_vec, s2_vec, tmax)
     end
     return Q_all, P_all
 end
-function Expectation_verdu(s1_0::Float64, s1::Vector{Float64}, s2::Vector{Float64}, tmax::Int)
+function Expectation_verdu(s1_0, s1, s2, tmax)
     # Generation 0
     #E_h1[1] = 0.0   # H_{1,0} = 0
     E_h1 = zeros(Float64, tmax)
     # Generation 1 (Eq. 10)
     E_h1[1] = s1_0
-    # Generations >= 2 (Eq. 11)
+    # Generations >= 2 (Eq. 11 from Verdu)
     for g in 2:tmax
         hprev = 1.0 - s1[g-1] - s2[g-1]
         E_h1[g] = s1[g-1] + hprev * E_h1[g-1]
@@ -70,7 +70,7 @@ function Expectation_verdu(s1_0::Float64, s1::Vector{Float64}, s2::Vector{Float6
 end
 
 # =============================================================================
-# x' and y' weights for A (b weighted) and a ((1-b) weighted)
+# x' and y' weights for A and a 
 # =============================================================================
 function get_xprime(s1, s2, h, x, b, θ)
     b3, b2, b1, b0 = b[:b3], b[:b2], b[:b1], b[:b0]
@@ -237,14 +237,14 @@ end
 # =============================================================================
 # Variance E[H_A^2] and E[H_a^2]
 # =============================================================================
-function E_H2_A1_gen1(s1_0, s2_0, xp, x0, b, θ) # Equation 26 for A 
+function E_H2_A1_gen1(s1_0, s2_0, xp, x0, b, θ) # Equation for A 
     # S1S1 q^2=1  S1S2 q^2=1/4  S2S2  q=0
     term1 = s1_0^2 * F_S1S1_A(x0, b, θ) / xp          # * 1 F_S1S1_A corresponds to W\bullet11 in manuscript
     term2 = 0.25 * s1_0 * s2_0 * F_S1S2_A(x0, b, θ) / xp  # * 1/4
     return term1 + term2
 end
 
-function E_H2_a1_gen1(s1_0, s2_0, yp, x0, b, θ) # Equation 26 for a
+function E_H2_a1_gen1(s1_0, s2_0, yp, x0, b, θ) # Equation for a
     term1 = s1_0^2 * F_S1S1_a(x0, b, θ) / yp
     term2 = 0.25 * s1_0 * s2_0 * F_S1S2_a(x0, b, θ) / yp
     return term1 + term2
@@ -330,7 +330,7 @@ function E_H2_a1_next(E2_prevA, E2_preva, E_prevA, E_preva,
     return const_part + s1h_part + s2h_part + hh_part
 end
 
-function Var_H_bullet_gen1(s1_0, s2_0, xp, yp, b, θ) # Equation 27 V[H_{\bullet 1,1}]
+function Var_H_bullet_gen1(s1_0, s2_0, xp, yp, b, θ) # Equation V[H_{\bullet 1,1}]
     # A carriers
     E_HA_sq = E_H2_A1_gen1(s1_0, s2_0, xp, x0, b, θ)
     E_HA    = E_H_A1_gen1(s1_0, s2_0, xp, x0, b, θ)
@@ -343,7 +343,7 @@ function Var_H_bullet_gen1(s1_0, s2_0, xp, yp, b, θ) # Equation 27 V[H_{\bullet
 
     # Total variance
     x1 = xp / (xp + yp)
-    Var_HT = x1 * Var_HA + (1 - x1) * Var_Ha #+ x1 * (1 - x1) * (E_HA - E_Ha)^2
+    Var_HT = x1 * Var_HA + (1 - x1) * Var_Ha + x1 * (1 - x1) * (E_HA - E_Ha)^2 
 
     return Var_HA, Var_Ha, Var_HT
 end
@@ -369,8 +369,6 @@ function Var_H_bullet_next(g, E2_HA_prev, E2_Ha_prev, E_HA_prev, E_Ha_prev,
 
     return Var_HA, Var_Ha, Var_HT
 end
-
-
 # =============================================================================
 # Weighted mating frequency functions
 # =============================================================================
@@ -562,10 +560,9 @@ function compute_gen_g(g, Q_prev, P_prevA, P_preva, s1, s2, h, x, b, θ)
 
     return Qg, PgA, Pga, xp, yp
 end
-# =============================================================================
-# Master runner: given b and θ, run tmax generations and return
-# E[H_T,g] and Var[H_T,g] for g = 1..tmax
-# =============================================================================
+# =========================================================================================================
+# The running part; given b and θ, run tmax generations and return E[H_T,g] and Var[H_T,g] for g = 1..tmax
+# =========================================================================================================
 function run_model(b, θ, s1_vec, s2_vec, x0, tmax)
     Q_all    = Vector{Vector{Float64}}()
     P_all_HA = Vector{Vector{Float64}}()
@@ -588,9 +585,9 @@ function run_model(b, θ, s1_vec, s2_vec, x0, tmax)
     x_vec    = Float64[x0]
     h_vec    = Float64[1.0 - s1_vec[1] - s2_vec[1]]
 
-     E_HA[1] = 0.0
-     E_Ha[1] = 0.0
-     E_HT[1] = 0.0
+    E_HA[1] = 0.0
+    E_Ha[1] = 0.0
+    E_HT[1] = 0.0
 
     E2_HA[1] = 0
     E2_Ha[1] = 0
@@ -645,7 +642,6 @@ function run_model(b, θ, s1_vec, s2_vec, x0, tmax)
     return x_vec, E_HA, E_Ha, E_HT, E2_HA, E2_Ha, Var_HA, Var_Ha, Var_HT, Q_all, P_all_HA, P_all_Ha #x_vec, E_HA, E_Ha, E_HT, Q_all, P_all_HA, P_all_Ha
             
 end
-
 # =============================================================================
 # Neutral example run
 # =============================================================================
